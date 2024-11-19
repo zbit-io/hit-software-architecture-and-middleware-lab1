@@ -39,13 +39,22 @@ func (b *Broker) Run() {
 
 func (b *Broker) Broadcast(msg message.Message) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	clients := make([]*Client, 0, len(b.clients))
 	for client := range b.clients {
+		clients = append(clients, client)
+	}
+	b.mu.Unlock()
+
+	for _, client := range clients {
 		select {
 		case client.send <- msg:
+			// 正常发送消息
 		default:
+			// 如果客户端的 `send` 通道阻塞，关闭该通道并从 `clients` 中删除客户端
 			close(client.send)
+			b.mu.Lock()
 			delete(b.clients, client)
+			b.mu.Unlock()
 		}
 	}
 }
